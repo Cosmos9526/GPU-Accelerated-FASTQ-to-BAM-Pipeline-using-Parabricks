@@ -1,21 +1,36 @@
-# GPU-Accelerated FASTQ to BAM Pipeline using Parabricks
+# GPU-Accelerated FASTQ to VCF Pipeline using Parabricks
 
-This README provides instructions to execute a GPU-accelerated variant of the GATK Best Practices alignment pipeline using NVIDIA Parabricks' `fq2bam` tool.
+This README provides a step-by-step guide to execute a **GPU-accelerated GATK Best Practices pipeline** using NVIDIA Parabricks. The workflow includes both alignment (FASTQ to BAM) and variant calling (BAM to VCF), leveraging the high-performance `cosmos9526/fq2bam_ref` Docker image.
 
-## 📦 Description
+---
 
-This pipeline takes paired-end FASTQ files and performs:
+## 📦 Pipeline Overview
+
+### Step 1: FASTQ to BAM (`fq2bam`)
+
+Performs:
 
 * Alignment with BWA-MEM
 * Sorting by coordinate
 * Marking duplicates
 * Base Quality Score Recalibration (BQSR)
 
-All operations are GPU-accelerated using the `cosmos9526/fq2bam_ref` Docker image.
+### Step 2: BAM to VCF (`haplotypecaller`)
+
+Performs:
+
+* Local reassembly of active regions
+* SNP and indel calling
+* Genotype likelihood calculation
+* Variant calling in VCF format
+
+All steps are fully GPU-accelerated.
 
 ---
 
-## 🚀 Run Command
+## 🚀 Run Commands
+
+### 1️⃣ FASTQ to BAM
 
 ```bash
 docker run --rm -it \
@@ -37,78 +52,99 @@ docker run --rm -it \
     --low-memory
 ```
 
+### 2️⃣ BAM to VCF
+
+```bash
+docker run --rm -it \
+  --runtime=nvidia \
+  --gpus '"device=1,2"' \
+  --privileged \
+  -v /home/dgx/0MMilad/input_example:/workdir \
+  -v /home/dgx/0MMilad/output:/outputdir \
+  cosmos9526/fq2bam_ref:tagname \
+  pbrun haplotypecaller \
+    --ref /refrence_genome/hg38.fa \
+    --in-bam /outputdir/output.bam \
+    --out-variants /outputdir/variants.vcf \
+    --num-gpus 2
+```
+
 ---
 
-## 🧠 Notes
+## 📁 Input Requirements
 
-* `--low-memory` reduces GPU memory usage to \~16GB per GPU.
-* `--num-gpus 2` ensures both specified GPUs are used.
-* Input and reference files must exist in the mounted volumes.
+| File                                | Description                  |
+| ----------------------------------- | ---------------------------- |
+| `normal_R1.fastq.gz`, `R2.fastq.gz` | Paired-end FASTQ files       |
+| `hg38.fa`                           | Reference genome FASTA       |
+| `*.vcf.gz`                          | Known variant sites for BQSR |
 
----
-
-## 📁 Expected Output
-
-After successful execution, the following files will be present in `/home/dgx/0MMilad/output`:
-
-* `output.bam` — Aligned and processed BAM file
-* `output.bam.bai` — BAM index file (auto-generated)
-* `recal.txt` — Base recalibration report
+> Ensure all reference and known sites are properly indexed and available in the mounted volume.
 
 ---
 
-## ✅ Post-run Validation
+## 📤 Output Files
 
-You can validate the output using `samtools`:
+| File             | Description                     |
+| ---------------- | ------------------------------- |
+| `output.bam`     | Aligned BAM file after BQSR     |
+| `output.bam.bai` | BAM index file (auto-generated) |
+| `recal.txt`      | BQSR recalibration report       |
+| `variants.vcf`   | Called variants in VCF format   |
 
-### View BAM content:
+---
+
+## 🧪 Validation
+
+### View BAM:
 
 ```bash
 samtools view output.bam | head
 ```
 
-### Check BAM statistics:
+### Stats:
 
 ```bash
 samtools flagstat output.bam
 ```
 
----
-
-## 🧪 Optional Enhancements
-
-* Add `--log-file /outputdir/fq2bam.log` to store logs.
-* Reduce `--bwa-options "-K 500000"` to limit memory per block.
-
----
-
-## 🧬 Reference Genome
-
-Ensure `/refrence_genome/hg38.fa` and its accompanying index files exist in the container.
-You can generate `.fai` index with:
+### View VCF:
 
 ```bash
-samtools faidx hg38.fa
+less /home/dgx/0MMilad/output/variants.vcf
+```
+
+### Count variants:
+
+```bash
+grep -v "^#" /home/dgx/0MMilad/output/variants.vcf | wc -l
 ```
 
 ---
 
-## 🧩 Version Info
+## 🧠 Tips & Enhancements
 
-This example uses:
+* Use `--log-file /outputdir/fq2bam.log` to save logs.
+* Tune memory with `--bwa-options "-K 500000"`.
+* Confirm BAM index (`output.bam.bai`) is present before variant calling.
 
-* Parabricks version: `4.3.2-1`
-* Docker image: `cosmos9526/fq2bam_ref:tagname`
-* CUDA version: >= 11.0
+---
+
+## 🧬 Software Versions
+
+* **Parabricks**: `4.3.2-1`
+* **Docker Image**: `cosmos9526/fq2bam_ref:tagname`
+* **CUDA**: `>= 11.0`
 
 ---
 
 ## 👨‍🔬 Author
 
-Milad Bagheri — GPU-accelerated genomics workflow setup.
+Milad Bagheri — GPU-powered genomics workflow designer
 
 ---
 
-## 📚 Documentation
+## 📚 References
 
-* Parabricks Docs: [https://docs.nvidia.com/clara/#parabricks](https://docs.nvidia.com/clara/#parabricks)
+* NVIDIA Parabricks: [https://docs.nvidia.com/clara/#parabricks](https://docs.nvidia.com/clara/#parabricks)
+* GATK HaplotypeCaller: [https://gatk.broadinstitute.org](https://gatk.broadinstitute.org)
